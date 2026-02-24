@@ -3,94 +3,95 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Penalty Master</title>
+    <title>Head Ball TG</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        body { margin: 0; background: #222; color: white; font-family: sans-serif; overflow: hidden; touch-action: none; }
-        #field { width: 100vw; height: 100vh; background: linear-gradient(#4facfe 0%, #00f2fe 40%, #27ae60 40%, #2ecc71 100%); position: relative; }
-        #gate { position: absolute; top: 15%; left: 50%; transform: translateX(-50%); width: 250px; height: 120px; border: 5px solid white; border-bottom: none; }
-        #ball { 
-            position: absolute; bottom: 15%; left: 50%; transform: translateX(-50%);
-            width: 60px; height: 60px; background: url('https://cdn-icons-png.flaticon.com/512/53/53283.png');
-            background-size: cover; transition: all 0.5s ease-out; z-index: 10;
-        }
-        .score-board { position: absolute; top: 5%; width: 100%; text-align: center; font-size: 24px; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
+        body { margin: 0; overflow: hidden; background: #87CEEB; font-family: Arial, sans-serif; touch-action: none; }
+        #game-folder { position: relative; width: 100vw; height: 100vh; background: linear-gradient(#87CEEB 70%, #2ecc71 70%); }
+        #player { position: absolute; width: 50px; height: 70px; background: #3498db; border-radius: 10px 10px 0 0; bottom: 30%; left: 50px; transition: transform 0.1s; }
+        #head { position: absolute; width: 40px; height: 40px; background: #f3c1ad; border-radius: 50%; top: -30px; left: 5px; border: 2px solid #000; }
+        #ball { position: absolute; width: 30px; height: 30px; background: white; border-radius: 50%; border: 2px solid #000; bottom: 50%; left: 50%; }
+        #goal { position: absolute; right: 0; bottom: 30%; width: 10px; height: 150px; background: white; border-left: 5px dashed rgba(255,255,255,0.5); }
+        .ui { position: absolute; top: 20px; width: 100%; text-align: center; font-size: 24px; font-weight: bold; color: white; pointer-events: none; }
     </style>
 </head>
 <body>
-    <div id="field">
-        <div class="score-board">СЧЕТ: <span id="score">0</span></div>
-        <div id="gate"></div>
+    <div id="game-folder">
+        <div class="ui">ГОЛЫ: <span id="score">0</span></div>
+        <div id="player"><div id="head"></div></div>
         <div id="ball"></div>
+        <div id="goal"></div>
     </div>
 
     <script>
         let tg = window.Telegram.WebApp;
         tg.expand();
 
+        const player = document.getElementById('player');
         const ball = document.getElementById('ball');
         const scoreEl = document.getElementById('score');
+
+        let pX = 50, pY = 0, pVelY = 0;
+        let bX = 200, bY = 200, bVelX = 2, bVelY = 0;
         let score = 0;
-        let startY, startX;
-        let isMoving = false;
+        let isJumping = false;
 
-        // Сенсорное управление
+        // Управление
+        let moveDir = 0;
         document.addEventListener('touchstart', (e) => {
-            if (isMoving) return;
-            startX = e.touches[0].clientX;
-            startY = e.touches[0].clientY;
-        });
-
-        document.addEventListener('touchend', (e) => {
-            if (isMoving) return;
-            let endX = e.changedTouches[0].clientX;
-            let endY = e.changedTouches[0].clientY;
-
-            // Расчет силы и направления свайпа
-            let diffX = endX - startX;
-            let diffY = endY - startY;
-
-            if (diffY < -50) { // Если свайп вверх
-                shoot(diffX, diffY);
+            const touchX = e.touches[0].clientX;
+            if (touchX < window.innerWidth / 2) {
+                moveDir = touchX < window.innerWidth / 4 ? -1 : 1;
+            } else {
+                if (!isJumping) { pVelY = 15; isJumping = true; }
             }
         });
+        document.addEventListener('touchend', () => moveDir = 0);
 
-        function shoot(x, y) {
-            isMoving = true;
-            ball.style.transition = "all 0.6s cubic-bezier(0.17, 0.67, 0.83, 0.67)";
-            
-            // Анимация полета мяча
-            ball.style.bottom = "75%"; 
-            ball.style.left = `calc(50% + ${x/2}px)`;
-            ball.style.width = "30px";
-            ball.style.height = "30px";
+        function update() {
+            // Физика игрока
+            pX += moveDir * 5;
+            pY += pVelY;
+            if (pY > 0) { pVelY -= 0.8; } else { pY = 0; pVelY = 0; isJumping = false; }
+            player.style.left = pX + 'px';
+            player.style.bottom = (30 + (pY / 5)) + '%';
 
-            // Проверка: попал в ворота или нет
-            setTimeout(() => {
-                let ballPos = ball.getBoundingClientRect();
-                let gatePos = document.getElementById('gate').getBoundingClientRect();
+            // Физика мяча
+            bX += bVelX;
+            bY += bVelY;
+            bVelY -= 0.5; // Гравитация мяча
 
-                if (ballPos.left > gatePos.left && ballPos.right < gatePos.right) {
-                    score++;
-                    scoreEl.innerText = score;
-                    tg.HapticFeedback.notificationOccurred('success');
-                } else {
-                    tg.HapticFeedback.notificationOccurred('error');
-                }
+            // Отскок от пола
+            if (bY < 0) { bY = 0; bVelY *= -0.8; }
+            // Отскок от стен
+            if (bX < 0 || bX > window.innerWidth - 30) bVelX *= -1;
 
-                // Возвращаем мяч назад
-                setTimeout(resetBall, 1000);
-            }, 600);
+            // Столкновение с головой
+            let pRect = player.getBoundingClientRect();
+            let bRect = ball.getBoundingClientRect();
+
+            if (bRect.left < pRect.right && bRect.right > pRect.left &&
+                bRect.bottom > pRect.top && bRect.top < pRect.bottom) {
+                bVelY = 10;
+                bVelX = (bX - pX) / 5;
+                tg.HapticFeedback.impactOccurred('medium');
+            }
+
+            // Гол
+            if (bX > window.innerWidth - 50 && bY < 100) {
+                score++;
+                scoreEl.innerText = score;
+                bX = 100; bY = 300; bVelX = 2;
+                tg.HapticFeedback.notificationOccurred('success');
+            }
+
+            ball.style.left = bX + 'px';
+            ball.style.bottom = (30 + (bY / 5)) + '%';
+
+            requestAnimationFrame(update);
         }
 
-        function resetBall() {
-            ball.style.transition = "none";
-            ball.style.bottom = "15%";
-            ball.style.left = "50%";
-            ball.style.width = "60px";
-            ball.style.height = "60px";
-            isMoving = false;
-        }
+        update();
     </script>
 </body>
 </html>
